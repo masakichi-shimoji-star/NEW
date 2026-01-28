@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ユーザー（候補者・管理者）
+model User {
+  id                   String             @id @default(uuid())
+  email                String             @unique
+  password             String
+  name                 String
+  nameKana             String?
+  phone                String?
+  address              String?
+  photo                String?
+  selfPr               String?
+  role                 Role               @default(CANDIDATE)
+  onboardingCompleted  Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  educations           Education[]
+  workHistories        WorkHistory[]
+  qualifications       Qualification[]
+  skills               Skill[]
+  desiredCondition     DesiredCondition?
+  reviewers            Reviewer[]
+  publicUrls           PublicUrl[]
+  adminActions         AdminAction[]
+}
+
+enum Role {
+  CANDIDATE
+  ADMIN
+}
+
+// 学歴
+model Education {
+  id              String      @id @default(uuid())
+  userId          String
+  schoolType      SchoolType
+  schoolName      String
+  faculty         String?
+  department      String?
+  enrollmentDate  DateTime
+  graduationDate  DateTime?
+  isEnrolled      Boolean     @default(false)
+  major           String?
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum SchoolType {
+  HIGH_SCHOOL
+  TECHNICAL_COLLEGE
+  VOCATIONAL_SCHOOL
+  JUNIOR_COLLEGE
+  UNIVERSITY
+  GRADUATE_SCHOOL
+  OTHER
+}
+
+// 職歴
+model WorkHistory {
+  id              String    @id @default(uuid())
+  userId          String
+  companyName     String
+  department      String?
+  employmentType  String
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrentJob    Boolean   @default(false)
+  position        String?
+  jobCategory     String?
+  responsibilities String
+  achievements    String?
+  skills          String?
+  createdAt       DateTime  @default(now())
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 資格
+model Qualification {
+  id           String   @id @default(uuid())
+  userId       String
+  name         String
+  acquiredDate DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// スキル
+model Skill {
+  id                String   @id @default(uuid())
+  userId            String
+  name              String
+  level             Int      @default(1) // 1-5
+  yearsOfExperience Int?
+  createdAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 希望条件
+model DesiredCondition {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  desiredJobType  String?
+  desiredLocation String?
+  desiredSalary   String?
+  availableDate   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 評価者
+model Reviewer {
+  id                  String         @id @default(uuid())
+  candidateId         String
+  name                String
+  email               String
+  company             String
+  department          String?
+  position            String?
+  relationship        Relationship
+  workPeriodStart     DateTime
+  workPeriodEnd       DateTime?
+  isCurrentlyWorking  Boolean        @default(false)
+  memo                String?
+  token               String         @unique @default(uuid())
+  status              ReviewerStatus @default(NOT_SENT)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  candidate           User           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evaluation          Evaluation?
+}
+
+enum Relationship {
+  SUPERVISOR
+  COLLEAGUE
+  SUBORDINATE
+  CLIENT
+  OTHER
+}
+
+enum ReviewerStatus {
+  NOT_SENT
+  SENT
+  IN_PROGRESS
+  COMPLETED
+}
+
+// 評価
+model Evaluation {
+  id                        String   @id @default(uuid())
+  reviewerId                String   @unique
+
+  // 総合結論
+  overallScore              Int?     // 0-100
+  recommendationScore       Int?     // 0-10
+  wouldWorkAgain            Boolean?
+  wouldWorkAgainReason      String?
+
+  // 数値評価（JSON形式で保存）
+  numericalEvaluations      String?  // JSON
+
+  // エピソード（JSON形式で保存）
+  episode1                  String?  // JSON
+  episode2                  String?  // JSON
+  episode3                  String?  // JSON
+
+  // 横断評価
+  strengthTop               String?
+  strengthEvidence          String?
+  riskTop                   String?
+  riskConditions            String?
+  riskSigns                 String?
+  riskMitigation            String?
+  suitableEnvironment       String?
+  managementTips            String?
+
+  // 総合人物像
+  overallPersonality        String?
+
+  // 最終チェック
+  factBased                 Boolean  @default(false)
+  confidentialityConsidered Boolean  @default(false)
+  noDefamation              Boolean  @default(false)
+
+  // ステータス
+  isDraft                   Boolean  @default(true)
+  submittedAt               DateTime?
+  canEdit                   Boolean  @default(true) // 修正可能かどうか
+  editDeadline              DateTime? // 修正期限
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  // 除外フラグ（管理者用）
+  isExcluded                Boolean  @default(false)
+  excludeReason             String?
+
+  reviewer                  Reviewer @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+}
+
+// 公開URL
+model PublicUrl {
+  id          String   @id @default(uuid())
+  candidateId String
+  token       String   @unique @default(uuid())
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  candidate   User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+// 管理者操作ログ
+model AdminAction {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  targetType  String
+  targetId    String
+  details     String?  // JSON
+  createdAt   DateTime @default(now())
+
+  admin       User     @relation(fields: [adminId], references: [id])
+}
